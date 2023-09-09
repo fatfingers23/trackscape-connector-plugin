@@ -24,6 +24,8 @@ import net.runelite.client.util.Text;
 import okhttp3.OkHttpClient;
 import net.runelite.api.clan.ClanID;
 
+import java.util.Objects;
+
 @Slf4j
 @PluginDescriptor(
         name = "TrackScape Connector"
@@ -45,33 +47,18 @@ public class TrackScapeConnectorPlugin extends Plugin {
     private Gson gson;
 
     private static final String BASE_API_ENDPOINT = "http://localhost:8001";
-    private static final int CHANNEL_UNRANKED = -2;
+    private static final String CLAN_WELCOME_TEXT = "To talk in your clan's channel, start each line of chat with // or /c.";
 
     private RemoteSubmitter remoteSubmitter;
 
     @Override
     protected void startUp() throws Exception {
-        log.info("Example started!");
     }
 
     @Override
     protected void shutDown() throws Exception {
-        log.info("Example stopped!");
     }
-
-    @Subscribe
-    public void onGameStateChanged(GameStateChanged gameStateChanged) {
-        if (gameStateChanged.getGameState() == GameState.LOGGED_IN) {
-            if (remoteSubmitter == null) {
-                startRemoteSubmitter();
-            }
-        }
-
-        if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN) {
-            shutdownRemoteSubmitter();
-        }
-    }
-
+    
     @Provides
     TrackScapeConnectorConfig provideConfig(ConfigManager configManager) {
         return configManager.getConfig(TrackScapeConnectorConfig.class);
@@ -90,6 +77,12 @@ public class TrackScapeConnectorPlugin extends Plugin {
                 } else {
                     sender = Text.removeFormattingTags(Text.toJagexName(event.getName()));
                 }
+                if (Objects.equals(sender, clanChannel.getName())) {
+                    if (event.getMessage().equals(CLAN_WELCOME_TEXT)) {
+                        break;
+                    }
+                }
+
                 var rank = GetMembersTitle(sender, clanChannel.getName());
                 ChatPayload chatPayload = ChatPayload.from(clanChannel.getName(), sender, event.getMessage(), rank);
                 remoteSubmitter.queue(chatPayload);
@@ -109,12 +102,17 @@ public class TrackScapeConnectorPlugin extends Plugin {
 
     @Subscribe
     public void onClanChannelChanged(ClanChannelChanged event) {
-        log.info("Clan channel changed: {}", event.getClanChannel());
+
         if (event.getClanId() == ClanID.CLAN) {
-            if (remoteSubmitter != null) {
-                shutdownRemoteSubmitter();
+            if (event.getClanChannel() == null) {
+                if (remoteSubmitter != null) {
+                    shutdownRemoteSubmitter();
+                }
+            } else {
+                if (remoteSubmitter == null) {
+                    startRemoteSubmitter();
+                }
             }
-            startRemoteSubmitter();
         }
     }
 
