@@ -5,6 +5,7 @@
 package com.trackscapeconnector;
 
 import com.google.gson.Gson;
+import com.trackscapeconnector.dtos.ChatPayload;
 import lombok.extern.slf4j.Slf4j;
 import net.jodah.failsafe.CircuitBreaker;
 import net.jodah.failsafe.Failsafe;

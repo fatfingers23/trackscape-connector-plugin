@@ -1,11 +1,7 @@
-package com.trackscapeconnector;
+package com.trackscapeconnector.dtos;
 
 import com.google.gson.annotations.SerializedName;
 import lombok.ToString;
-import net.runelite.api.events.ChatMessage;
-
-import java.time.Clock;
-import java.time.ZonedDateTime;
 
 
 @ToString

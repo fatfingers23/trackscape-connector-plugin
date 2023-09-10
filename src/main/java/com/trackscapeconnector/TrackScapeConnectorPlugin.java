@@ -5,25 +5,31 @@ import com.google.inject.Provides;
 
 import javax.inject.Inject;
 
+import com.trackscapeconnector.dtos.ChatPayload;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
-import net.runelite.api.GameState;
+import net.runelite.api.IndexedSprite;
 import net.runelite.api.clan.ClanChannel;
 import net.runelite.api.clan.ClanChannelMember;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.ClanChannelChanged;
-import net.runelite.api.events.GameStateChanged;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.Text;
 import okhttp3.OkHttpClient;
 import net.runelite.api.clan.ClanID;
+import okhttp3.Request;
+import okhttp3.WebSocket;
+import okhttp3.WebSocketListener;
 
+import java.awt.image.BufferedImage;
+import java.util.Arrays;
 import java.util.Objects;
 
 @Slf4j
@@ -31,34 +37,37 @@ import java.util.Objects;
         name = "TrackScape Connector"
 )
 public class TrackScapeConnectorPlugin extends Plugin {
+    private static final int NORMAL_CLOSURE_STATUS = 1000;
     @Inject
     private Client client;
-
     @Inject
     private ClientThread clientThread;
-
     @Inject
     private TrackScapeConnectorConfig config;
-
     @Inject
     private OkHttpClient httpClient;
-
     @Inject
     private Gson gson;
-
-    private static final String BASE_API_ENDPOINT = "http://localhost:8001";
     private static final String CLAN_WELCOME_TEXT = "To talk in your clan's channel, start each line of chat with // or /c.";
-
     private RemoteSubmitter remoteSubmitter;
+    private WebSocketListener webSocketListener;
+    public WebSocket ws;
+    private int discordIconLocation = -1;
+    private String iconImg;
+
 
     @Override
     protected void startUp() throws Exception {
+        clientThread.invoke(() ->
+        {
+            if (client.getModIcons() == null) {
+                return false;
+            }
+            loadIcon();
+            return true;
+        });
     }
 
-    @Override
-    protected void shutDown() throws Exception {
-    }
-    
     @Provides
     TrackScapeConnectorConfig provideConfig(ConfigManager configManager) {
         return configManager.getConfig(TrackScapeConnectorConfig.class);
@@ -97,6 +106,15 @@ public class TrackScapeConnectorPlugin extends Plugin {
                 shutdownRemoteSubmitter();
             }
             startRemoteSubmitter();
+            if (config.allowMessagesFromDiscord()) {
+                if (webSocketListener == null) {
+                    startWebsocket(config.webSocketEndpoint());
+                }
+            } else {
+                if (webSocketListener != null) {
+                    stopWebsocket();
+                }
+            }
         }
     }
 
@@ -107,8 +125,18 @@ public class TrackScapeConnectorPlugin extends Plugin {
             if (event.getClanChannel() == null) {
                 if (remoteSubmitter != null) {
                     shutdownRemoteSubmitter();
+                    stopWebsocket();
+                }
+                if (webSocketListener != null) {
+                    stopWebsocket();
                 }
             } else {
+                if (config.allowMessagesFromDiscord()) {
+                    if (webSocketListener == null) {
+                        startWebsocket(config.webSocketEndpoint());
+                    }
+                }
+
                 if (remoteSubmitter == null) {
                     startRemoteSubmitter();
                 }
@@ -124,7 +152,7 @@ public class TrackScapeConnectorPlugin extends Plugin {
         }
 
         log.debug("Starting a new remoteSubmitter...");
-        remoteSubmitter = RemoteSubmitter.create(httpClient, gson, BASE_API_ENDPOINT, config.verificationCode());
+        remoteSubmitter = RemoteSubmitter.create(httpClient, gson, config.httpApiEndpoint(), config.verificationCode());
         remoteSubmitter.initialize();
     }
 
@@ -154,5 +182,39 @@ public class TrackScapeConnectorPlugin extends Plugin {
         }
 
         return "Guest";
+    }
+
+    public void startWebsocket(String host) {
+        log.debug("Connecting...");
+        Request request = new Request.Builder().url(String.format("%s/api/chat/ws", host))
+                .addHeader("verification-code", config.verificationCode())
+                .build();
+
+        webSocketListener = new com.trackscapeconnector.WebSocketListener(client, clientThread, httpClient, gson, discordIconLocation);
+        ws = httpClient.newWebSocket(request, webSocketListener);
+    }
+
+    public void stopWebsocket() {
+        ws.close(NORMAL_CLOSURE_STATUS, null);
+        webSocketListener = null;
+    }
+
+    private void loadIcon() {
+
+        final IndexedSprite[] modIcons = client.getModIcons();
+
+        if (discordIconLocation != -1 || modIcons == null) {
+            return;
+        }
+
+        BufferedImage image = ImageUtil.loadImageResource(getClass(), "/discord-mark-blue-smaller.png");
+        IndexedSprite indexedSprite = ImageUtil.getImageIndexedSprite(image, client);
+        discordIconLocation = modIcons.length;
+
+        final IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + 1);
+        newModIcons[newModIcons.length - 1] = indexedSprite;
+
+        client.setModIcons(newModIcons);
+
     }
 }
