@@ -9,6 +9,7 @@ import com.trackscapeconnector.dtos.ChatPayload;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.IconID;
 import net.runelite.api.IndexedSprite;
 import net.runelite.api.clan.ClanChannel;
 import net.runelite.api.clan.ClanChannelMember;
@@ -31,6 +32,8 @@ import okhttp3.WebSocketListener;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Slf4j
 @PluginDescriptor(
@@ -54,6 +57,7 @@ public class TrackScapeConnectorPlugin extends Plugin {
     public WebSocket ws;
     private int discordIconLocation = -1;
     private String iconImg;
+    private static final Pattern ICON_PATTERN = Pattern.compile("<img=(\\d+)>");
 
 
     @Override
@@ -81,6 +85,7 @@ public class TrackScapeConnectorPlugin extends Plugin {
             case CLAN_MESSAGE:
                 ClanChannel clanChannel = client.getClanChannel();
                 String sender = "";
+                log.debug("Sender: " + event.getName());
                 if (event.getType() == ChatMessageType.CLAN_MESSAGE) {
                     sender = clanChannel.getName();
                 } else {
@@ -92,8 +97,14 @@ public class TrackScapeConnectorPlugin extends Plugin {
                     }
                 }
 
+                int iconId = IconID.NO_ENTRY.getIndex();
+                var matcher = ICON_PATTERN.matcher(event.getName());
+                if (matcher.find()) {
+                    iconId = Integer.parseInt(matcher.group(1));
+                }
+
                 var rank = GetMembersTitle(sender, clanChannel.getName());
-                ChatPayload chatPayload = ChatPayload.from(clanChannel.getName(), sender, event.getMessage(), rank);
+                ChatPayload chatPayload = ChatPayload.from(clanChannel.getName(), sender, event.getMessage(), rank, iconId);
                 remoteSubmitter.queue(chatPayload);
                 break;
         }
@@ -186,7 +197,7 @@ public class TrackScapeConnectorPlugin extends Plugin {
 
     public void startWebsocket(String host) {
         log.debug("Connecting...");
-        Request request = new Request.Builder().url(String.format("%s/api/chat/ws", host))
+        Request request = new Request.Builder().url(host)
                 .addHeader("verification-code", config.verificationCode())
                 .build();
 

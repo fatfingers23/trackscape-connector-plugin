@@ -3,6 +3,7 @@ package com.trackscapeconnector;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import net.runelite.client.config.ConfigSection;
 
 @ConfigGroup("trackScapeconnectorplugin")
 public interface TrackScapeConnectorConfig extends Config {
@@ -26,23 +27,32 @@ public interface TrackScapeConnectorConfig extends Config {
         return true;
     }
 
+
+    @ConfigSection(
+            name = "Advance Settings",
+            description = "Settings for setting up your own TrackScape API.",
+            position = 3,
+            closedByDefault = true
+    )
+    String advanceSettings = "advancesettings";
+
     @ConfigItem(
             keyName = "httpApiEndpoint",
-            name = "URL Base for the API",
+            name = "URL for sending Clan Chats",
             description = "Host your own TrackScape API and enter the URL here.",
-            hidden = false
+            section = advanceSettings
     )
     default String httpApiEndpoint() {
-        return "http://localhost:8001";
+        return "https://bot.trackscape.app/api/chat/new-clan-chat";
     }
 
     @ConfigItem(
             keyName = "wsEndpoint",
-            name = "URL Base for Websockets",
+            name = "Websocket url for receiving Discord messages",
             description = "Host your own TrackScape API and enter the URL here for WebSockets.",
-            hidden = false
+            section = advanceSettings
     )
     default String webSocketEndpoint() {
-        return "ws://127.0.0.1:8001";
+        return "wss://bot.trackscape.app/api/chat/ws";
     }
 }

@@ -26,7 +26,7 @@ public class RemoteSubmitter {
 
     private static final MediaType APPLICATION_JSON = MediaType.parse("application/json");
     private static final int MAX_ENTRIES_PER_TICK = 30;
-    private static final int TICK_INTERVAL = 5;
+    private static final int TICK_INTERVAL = 2;
 
     private static final CircuitBreaker<Object> BREAKER = new CircuitBreaker<>()
             .handle(IOException.class)
@@ -38,14 +38,14 @@ public class RemoteSubmitter {
     private final ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
     private final OkHttpClient okHttpClient;
     private final Gson gson;
-    private final String RemoteServerRootEndpoint;
+    private final String sendClanChatsEndpoint;
 
     private final String VerificationCode;
 
-    private RemoteSubmitter(OkHttpClient okHttpClient, Gson gson, String remoteServerRootEndpoint, String verificationCode) {
+    private RemoteSubmitter(OkHttpClient okHttpClient, Gson gson, String sendClanChatsEndpoint, String verificationCode) {
         this.okHttpClient = okHttpClient;
         this.gson = gson;
-        this.RemoteServerRootEndpoint = remoteServerRootEndpoint;
+        this.sendClanChatsEndpoint = sendClanChatsEndpoint;
         this.VerificationCode = verificationCode;
     }
 
@@ -79,7 +79,7 @@ public class RemoteSubmitter {
         try {
             Failsafe.with(BREAKER).run(() -> {
                 Request request = new Builder()
-                        .url(RemoteServerRootEndpoint + "/api/chat/new-message")
+                        .url(sendClanChatsEndpoint)
                         .addHeader("verification-code", VerificationCode)
                         .post(payload)
                         .build();
