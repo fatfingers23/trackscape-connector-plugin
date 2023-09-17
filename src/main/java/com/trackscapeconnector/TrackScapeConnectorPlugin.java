@@ -121,6 +121,7 @@ public class TrackScapeConnectorPlugin extends Plugin {
                 startWebsocket(config.webSocketEndpoint());
                 shutdownRemoteSubmitter();
                 startRemoteSubmitter();
+                return;
             }
 
             if (remoteSubmitter != null) {
