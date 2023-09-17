@@ -82,6 +82,9 @@ public class TrackScapeConnectorPlugin extends Plugin {
 
             case CLAN_CHAT:
             case CLAN_MESSAGE:
+                if (Objects.equals(config.verificationCode(), "") || config.verificationCode() == null) {
+                    return;
+                }
                 ClanChannel clanChannel = client.getClanChannel();
                 String sender = "";
                 log.debug("Sender: " + event.getName());
@@ -112,6 +115,14 @@ public class TrackScapeConnectorPlugin extends Plugin {
     @Subscribe
     public void onConfigChanged(ConfigChanged event) {
         if (event.getGroup().equals("trackScapeconnectorplugin")) {
+
+            if (event.getKey().equals("verificationcode")) {
+                stopWebsocket();
+                startWebsocket(config.webSocketEndpoint());
+                shutdownRemoteSubmitter();
+                startRemoteSubmitter();
+            }
+
             if (remoteSubmitter != null) {
                 shutdownRemoteSubmitter();
             }
@@ -205,8 +216,10 @@ public class TrackScapeConnectorPlugin extends Plugin {
     }
 
     public void stopWebsocket() {
-        ws.close(NORMAL_CLOSURE_STATUS, null);
-        webSocketListener = null;
+        if (ws != null) {
+            ws.close(NORMAL_CLOSURE_STATUS, null);
+            webSocketListener = null;
+        }
     }
 
     private void loadIcon() {
