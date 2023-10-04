@@ -7,14 +7,12 @@ import javax.inject.Inject;
 
 import com.trackscapeconnector.dtos.ChatPayload;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.Client;
-import net.runelite.api.IconID;
-import net.runelite.api.IndexedSprite;
+import net.runelite.api.*;
 import net.runelite.api.clan.ClanChannel;
 import net.runelite.api.clan.ClanChannelMember;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.ClanChannelChanged;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -27,7 +25,7 @@ import okhttp3.OkHttpClient;
 import net.runelite.api.clan.ClanID;
 import okhttp3.Request;
 import okhttp3.WebSocket;
-import okhttp3.WebSocketListener;
+import com.trackscapeconnector.WebSocketListener;
 
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
@@ -154,14 +152,23 @@ public class TrackScapeConnectorPlugin extends Plugin {
                 }
             } else {
                 if (config.allowMessagesFromDiscord()) {
-                    if (webSocketListener == null) {
-                        startWebsocket(config.webSocketEndpoint());
-                    }
+                    webSocketListener = null;
+                    startWebsocket(config.webSocketEndpoint());
                 }
+                remoteSubmitter = null;
+                startRemoteSubmitter();
+            }
+        }
+    }
 
-                if (remoteSubmitter == null) {
-                    startRemoteSubmitter();
-                }
+    @Subscribe
+    public void onGameStateChanged(GameStateChanged gameStateChanged) {
+        if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN) {
+            if (remoteSubmitter != null) {
+                shutdownRemoteSubmitter();
+            }
+            if (webSocketListener != null) {
+                stopWebsocket();
             }
         }
     }
