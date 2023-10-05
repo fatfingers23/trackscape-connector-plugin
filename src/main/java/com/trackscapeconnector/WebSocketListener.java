@@ -10,10 +10,8 @@ import net.runelite.api.Client;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.Text;
 import okhttp3.OkHttpClient;
-import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.WebSocket;
-import okio.ByteString;
 
 import java.lang.reflect.Type;
 
@@ -23,9 +21,9 @@ public final class WebSocketListener extends okhttp3.WebSocketListener {
     private ClientThread clientThread;
     private Client client;
 
-    private boolean socketConnected;
+    public boolean socketConnected;
 
-    private boolean socketConnecting = true;
+    public boolean socketConnecting = true;
 
     private static final int NORMAL_CLOSURE_STATUS = 1000;
 
@@ -62,11 +60,11 @@ public final class WebSocketListener extends okhttp3.WebSocketListener {
         }
 
     }
-    
+
     @Override
     public void onClosing(WebSocket webSocket, int code, String reason) {
         webSocket.close(NORMAL_CLOSURE_STATUS, null);
-        System.out.println("Closing: " + code + " " + reason);
+        log.debug("Closing: " + code + " " + reason);
         socketConnecting = false;
         socketConnected = false;
     }
@@ -85,6 +83,5 @@ public final class WebSocketListener extends okhttp3.WebSocketListener {
             client.addChatMessage(ChatMessageType.CLAN_CHAT, sender, message.message, clanName, false);
         });
     }
-
 
 }

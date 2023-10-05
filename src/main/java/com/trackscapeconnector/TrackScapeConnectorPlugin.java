@@ -30,6 +30,9 @@ import com.trackscapeconnector.WebSocketListener;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -38,6 +41,7 @@ import java.util.regex.Pattern;
 )
 public class TrackScapeConnectorPlugin extends Plugin {
     private static final int NORMAL_CLOSURE_STATUS = 1000;
+    private static final int WS_RECONNECT_CHECK_INTERVAL = 2;
     @Inject
     private Client client;
     @Inject
@@ -55,7 +59,7 @@ public class TrackScapeConnectorPlugin extends Plugin {
     private int discordIconLocation = -1;
     private String iconImg;
     private static final Pattern ICON_PATTERN = Pattern.compile("<img=(\\d+)>");
-
+    private ScheduledExecutorService wsExecutorService;
 
     @Override
     protected void startUp() throws Exception {
@@ -85,7 +89,6 @@ public class TrackScapeConnectorPlugin extends Plugin {
                 }
                 ClanChannel clanChannel = client.getClanChannel();
                 String sender = "";
-                log.debug("Sender: " + event.getName());
                 if (event.getType() == ChatMessageType.CLAN_MESSAGE) {
                     sender = clanChannel.getName();
                 } else {
@@ -221,13 +224,25 @@ public class TrackScapeConnectorPlugin extends Plugin {
 
         webSocketListener = new com.trackscapeconnector.WebSocketListener(client, clientThread, httpClient, gson, discordIconLocation);
         ws = httpClient.newWebSocket(request, webSocketListener);
+        wsExecutorService = Executors.newSingleThreadScheduledExecutor();
+        wsExecutorService.scheduleAtFixedRate(this::checkWebSocketConnection, WS_RECONNECT_CHECK_INTERVAL, WS_RECONNECT_CHECK_INTERVAL, TimeUnit.MINUTES);
     }
 
     public void stopWebsocket() {
         if (ws != null) {
             ws.close(NORMAL_CLOSURE_STATUS, null);
+            wsExecutorService.shutdown();
+            wsExecutorService = null;
             webSocketListener = null;
         }
+    }
+
+    private void checkWebSocketConnection() {
+        if (webSocketListener.socketConnected || webSocketListener.socketConnecting) {
+            return;
+        }
+        stopWebsocket();
+        startWebsocket(config.webSocketEndpoint());
     }
 
     private void loadIcon() {
