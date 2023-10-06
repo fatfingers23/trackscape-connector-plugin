@@ -85,8 +85,13 @@ public class TrackScapeConnectorPlugin extends Plugin {
             case CLAN_CHAT:
             case CLAN_MESSAGE:
                 if (Objects.equals(config.verificationCode(), "") || config.verificationCode() == null) {
-                    return;
+                    break;
                 }
+
+                if (Objects.equals(event.getName(), "") && Objects.equals(event.getSender(), "")) {
+                    break;
+                }
+
                 ClanChannel clanChannel = client.getClanChannel();
                 String sender = "";
                 if (event.getType() == ChatMessageType.CLAN_MESSAGE) {
