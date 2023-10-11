@@ -2,14 +2,12 @@ package com.trackscapeconnector;
 
 import com.google.gson.Gson;
 import com.google.inject.Provides;
-
-import javax.inject.Inject;
-
 import com.trackscapeconnector.dtos.ChatPayload;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.clan.ClanChannel;
 import net.runelite.api.clan.ClanChannelMember;
+import net.runelite.api.clan.ClanID;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.ClanChannelChanged;
 import net.runelite.api.events.GameStateChanged;
@@ -22,11 +20,10 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.Text;
 import okhttp3.OkHttpClient;
-import net.runelite.api.clan.ClanID;
 import okhttp3.Request;
 import okhttp3.WebSocket;
-import com.trackscapeconnector.WebSocketListener;
 
+import javax.inject.Inject;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
 import java.util.Objects;
@@ -71,6 +68,13 @@ public class TrackScapeConnectorPlugin extends Plugin {
             loadIcon();
             return true;
         });
+        startRemoteSubmitter();
+    }
+
+    @Override
+    protected void shutDown() throws Exception {
+        stopWebsocket();
+        shutdownRemoteSubmitter();
     }
 
     @Provides
@@ -122,26 +126,12 @@ public class TrackScapeConnectorPlugin extends Plugin {
     public void onConfigChanged(ConfigChanged event) {
         if (event.getGroup().equals("trackScapeconnectorplugin")) {
 
-            if (event.getKey().equals("verificationcode")) {
-                stopWebsocket();
-                startWebsocket(config.webSocketEndpoint());
-                shutdownRemoteSubmitter();
-                startRemoteSubmitter();
-                return;
-            }
-
-            if (remoteSubmitter != null) {
-                shutdownRemoteSubmitter();
-            }
+            shutdownRemoteSubmitter();
             startRemoteSubmitter();
-            if (config.allowMessagesFromDiscord()) {
-                if (webSocketListener == null) {
-                    startWebsocket(config.webSocketEndpoint());
-                }
-            } else {
-                if (webSocketListener != null) {
-                    stopWebsocket();
-                }
+            stopWebsocket();
+
+            if (!config.allowMessagesFromDiscord()) {
+                startWebsocket(config.webSocketEndpoint());
             }
         }
     }
@@ -151,16 +141,11 @@ public class TrackScapeConnectorPlugin extends Plugin {
 
         if (event.getClanId() == ClanID.CLAN) {
             if (event.getClanChannel() == null) {
-                if (remoteSubmitter != null) {
-                    shutdownRemoteSubmitter();
-                    stopWebsocket();
-                }
-                if (webSocketListener != null) {
-                    stopWebsocket();
-                }
+                shutdownRemoteSubmitter();
+                stopWebsocket();
             } else {
                 if (config.allowMessagesFromDiscord()) {
-                    webSocketListener = null;
+                    stopWebsocket();
                     startWebsocket(config.webSocketEndpoint());
                 }
                 remoteSubmitter = null;
@@ -172,12 +157,8 @@ public class TrackScapeConnectorPlugin extends Plugin {
     @Subscribe
     public void onGameStateChanged(GameStateChanged gameStateChanged) {
         if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN) {
-            if (remoteSubmitter != null) {
-                shutdownRemoteSubmitter();
-            }
-            if (webSocketListener != null) {
-                stopWebsocket();
-            }
+            shutdownRemoteSubmitter();
+            stopWebsocket();
         }
     }
 
@@ -236,10 +217,12 @@ public class TrackScapeConnectorPlugin extends Plugin {
     public void stopWebsocket() {
         if (ws != null) {
             ws.close(NORMAL_CLOSURE_STATUS, null);
-            wsExecutorService.shutdown();
+            if (wsExecutorService != null) {
+                wsExecutorService.shutdown();
+            }
             wsExecutorService = null;
-            webSocketListener = null;
         }
+        webSocketListener = null;
     }
 
     private void checkWebSocketConnection() {
