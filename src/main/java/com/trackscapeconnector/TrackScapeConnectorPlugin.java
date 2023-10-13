@@ -8,13 +8,12 @@ import net.runelite.api.*;
 import net.runelite.api.clan.ClanChannel;
 import net.runelite.api.clan.ClanChannelMember;
 import net.runelite.api.clan.ClanID;
-import net.runelite.api.events.ChatMessage;
-import net.runelite.api.events.ClanChannelChanged;
-import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.*;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.game.WorldService;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.util.ImageUtil;
@@ -39,6 +38,8 @@ import java.util.regex.Pattern;
 public class TrackScapeConnectorPlugin extends Plugin {
     private static final int NORMAL_CLOSURE_STATUS = 1000;
     private static final int WS_RECONNECT_CHECK_INTERVAL = 2;
+    private static final Pattern ICON_PATTERN = Pattern.compile("<img=(\\d+)>");
+    private static final String CLAN_WELCOME_TEXT = "To talk in your clan's channel, start each line of chat with // or /c.";
     @Inject
     private Client client;
     @Inject
@@ -49,14 +50,14 @@ public class TrackScapeConnectorPlugin extends Plugin {
     private OkHttpClient httpClient;
     @Inject
     private Gson gson;
-    private static final String CLAN_WELCOME_TEXT = "To talk in your clan's channel, start each line of chat with // or /c.";
+    @Inject
+    private WorldService worldService;
     private RemoteSubmitter remoteSubmitter;
     private WebSocketListener webSocketListener;
     public WebSocket ws;
     private int discordIconLocation = -1;
-    private String iconImg;
-    private static final Pattern ICON_PATTERN = Pattern.compile("<img=(\\d+)>");
     private ScheduledExecutorService wsExecutorService;
+    private FindWordTypeService findWordTypeService;
 
     @Override
     protected void startUp() throws Exception {
@@ -69,6 +70,7 @@ public class TrackScapeConnectorPlugin extends Plugin {
             return true;
         });
         startRemoteSubmitter();
+        findWordTypeService = new FindWordTypeService(worldService, client);
     }
 
     @Override
@@ -98,6 +100,7 @@ public class TrackScapeConnectorPlugin extends Plugin {
 
                 ClanChannel clanChannel = client.getClanChannel();
                 String sender = "";
+                var isLeagueWorld = false;
                 if (event.getType() == ChatMessageType.CLAN_MESSAGE) {
                     sender = clanChannel.getName();
                 } else {
@@ -107,6 +110,7 @@ public class TrackScapeConnectorPlugin extends Plugin {
                     if (event.getMessage().equals(CLAN_WELCOME_TEXT)) {
                         break;
                     }
+                    isLeagueWorld = findWordTypeService.isPlayerInLeaguesWorld(event.getMessage());
                 }
 
                 int iconId = IconID.NO_ENTRY.getIndex();
@@ -116,7 +120,7 @@ public class TrackScapeConnectorPlugin extends Plugin {
                 }
 
                 var rank = GetMembersTitle(sender, clanChannel.getName());
-                ChatPayload chatPayload = ChatPayload.from(clanChannel.getName(), sender, event.getMessage(), rank, iconId);
+                ChatPayload chatPayload = ChatPayload.from(clanChannel.getName(), sender, event.getMessage(), rank, iconId, isLeagueWorld);
                 remoteSubmitter.queue(chatPayload);
                 break;
         }
@@ -140,6 +144,7 @@ public class TrackScapeConnectorPlugin extends Plugin {
     public void onClanChannelChanged(ClanChannelChanged event) {
 
         if (event.getClanId() == ClanID.CLAN) {
+            findWordTypeService.loadClanMembers();
             if (event.getClanChannel() == null) {
                 shutdownRemoteSubmitter();
                 stopWebsocket();
@@ -155,10 +160,33 @@ public class TrackScapeConnectorPlugin extends Plugin {
     }
 
     @Subscribe
+    public void onClanMemberJoined(ClanMemberJoined event) {
+
+        String channelName = event.getClanChannel().getName();
+        if (!Objects.equals(channelName, client.getClanChannel().getName())) {
+            return;
+        }
+        findWordTypeService.CLAN_MEMBER_NAMES.add(event.getClanMember().getName());
+    }
+
+    @Subscribe
+    public void onClanMemberLeft(ClanMemberLeft event) {
+
+        String channelName = event.getClanChannel().getName();
+        if (!Objects.equals(channelName, client.getClanChannel().getName())) {
+            return;
+        }
+        findWordTypeService.CLAN_MEMBER_NAMES.remove(event.getClanMember().getName());
+    }
+
+    @Subscribe
     public void onGameStateChanged(GameStateChanged gameStateChanged) {
         if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN) {
             shutdownRemoteSubmitter();
             stopWebsocket();
+        }
+        if (gameStateChanged.getGameState() == GameState.LOGGED_IN) {
+            findWordTypeService.loadWorldTypes();
         }
     }
 
