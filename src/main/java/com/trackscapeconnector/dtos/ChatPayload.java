@@ -23,7 +23,6 @@ public class ChatPayload {
         this.message = message;
         this.rank = rank;
         this.iconId = iconId;
-
         this.isLeagueWorld = isLeagueWorld;
     }
 

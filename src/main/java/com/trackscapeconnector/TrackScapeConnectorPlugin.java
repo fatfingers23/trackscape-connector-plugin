@@ -218,15 +218,14 @@ public class TrackScapeConnectorPlugin extends Plugin {
                 var rank = member.getRank();
                 var clanSettings = client.getClanSettings();
                 if (clanSettings != null) {
-                    var clanTitle = clanSettings.titleForRank(rank).getName();
-                    if (clanTitle != null) {
-                        return clanTitle;
+                    var titleForRank = clanSettings.titleForRank(rank);
+                    if (titleForRank == null) {
+                        return "Not Ranked";
                     }
+                    return titleForRank.getName();
                 }
-
             }
         }
-
         return "Guest";
     }
 
